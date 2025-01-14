@@ -21,6 +21,10 @@ pub enum AstNode {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
+    // this vector may contain vectors
+    // it's up to the compiler to verify the shape of the
+    // structure
+    VecLit(Vec<Expr>),
     Lit(String),
     Val(String, Vec<Expr>),
     NumOp {
@@ -127,6 +131,14 @@ impl LangParser {
     fn build_expr_from_pair(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<Expr> {
         match pair.as_rule() {
             Rule::literal_dec => Ok(Expr::Lit(pair.as_str().to_string())),
+            Rule::vector_lit => {
+                let mut pair = pair.into_inner();
+                let mut vars = vec![];
+                while let Some(v) = pair.next() {
+                    vars.push(self.build_expr_from_pair(v)?);
+                }
+                Ok(Expr::VecLit(vars))
+            }
             Rule::atom => {
                 let mut pair = pair.into_inner();
                 let n = Self::next_or_error(&mut pair)?;
@@ -251,6 +263,56 @@ mod tests {
                 },
             ),
         ];
+        assert_eq!(expected, p.ast);
+        Ok(())
+    }
+
+    #[test]
+    fn parse_vec_literal() -> Result<()> {
+        let program = "static v = [0, 1, 2, 3, 4]";
+        let p = LangParser::parse(program, "test_program")?;
+        let expected = vec![AstNode::Def(
+            "static".to_string(),
+            "v".to_string(),
+            Expr::VecLit(vec![
+                Expr::Lit("0".to_string()),
+                Expr::Lit("1".to_string()),
+                Expr::Lit("2".to_string()),
+                Expr::Lit("3".to_string()),
+                Expr::Lit("4".to_string()),
+            ]),
+        )];
+        assert_eq!(expected, p.ast);
+        Ok(())
+    }
+
+    #[test]
+    fn parse_mat_literal() -> Result<()> {
+        let program = "static v = [[0, 9], [1, 10], [2, 11], [3, 12], [4, 13]]";
+        let p = LangParser::parse(program, "test_program")?;
+        let expected = vec![AstNode::Def(
+            "static".to_string(),
+            "v".to_string(),
+            Expr::VecLit(vec![
+                Expr::VecLit(vec![Expr::Lit("0".to_string()), Expr::Lit("9".to_string())]),
+                Expr::VecLit(vec![
+                    Expr::Lit("1".to_string()),
+                    Expr::Lit("10".to_string()),
+                ]),
+                Expr::VecLit(vec![
+                    Expr::Lit("2".to_string()),
+                    Expr::Lit("11".to_string()),
+                ]),
+                Expr::VecLit(vec![
+                    Expr::Lit("3".to_string()),
+                    Expr::Lit("12".to_string()),
+                ]),
+                Expr::VecLit(vec![
+                    Expr::Lit("4".to_string()),
+                    Expr::Lit("13".to_string()),
+                ]),
+            ]),
+        )];
         assert_eq!(expected, p.ast);
         Ok(())
     }

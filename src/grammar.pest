@@ -3,8 +3,12 @@ program = _{ SOI ~ (stmt? ~ "\n")* ~ EOI }
 stmt = _{ def | def_empty }
 
 expr    = { primary ~ (op ~ primary)* }
-primary = _{ parenth | atom }
+primary = _{ parenth | atom | vector_lit }
 parenth = { "(" ~ expr ~ ")" }
+
+// vector literal may contain nested vectors
+// to form a matrix or hypercube
+vector_lit = { "[" ~ (expr ~ ",")* ~ expr ~ "]" }
 
 op  = _{ add | sub | mul | inv }
 add =  { "+" }
@@ -15,7 +19,7 @@ inv =  { "/" }
 // we'll handle keyword checking in rust
 // so we can output a more clean error
 raw_type = @{ char+ }
-def = { raw_type ~ varname ~ "=" ~ expr }
+def = { raw_type ~ varname ~ "=" ~ (expr) }
 
 // if a colon is specified a shape must follow
 def_empty = { raw_type ~ varname ~ (":" ~ type_shape+)? }
