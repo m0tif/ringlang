@@ -143,6 +143,11 @@ impl LangParser {
                     _ => anyhow::bail!("invalid atom"),
                 }
             }
+            Rule::parenth => {
+                let mut pair = pair.into_inner();
+                let n = LangParser::next_or_error(&mut pair)?;
+                self.build_expr_from_pair(n)
+            }
             Rule::expr => {
                 let mut pair = pair.into_inner();
                 if pair.len() == 1 {
@@ -152,11 +157,7 @@ impl LangParser {
                     .op(Op::infix(Rule::add, Assoc::Left) | Op::infix(Rule::sub, Assoc::Left))
                     .op(Op::infix(Rule::mul, Assoc::Left) | Op::infix(Rule::inv, Assoc::Left));
                 pratt
-                    .map_primary(|primary| match primary.as_rule() {
-                        Rule::atom => self.build_expr_from_pair(primary),
-                        Rule::expr => self.build_expr_from_pair(primary),
-                        _ => Err(anyhow::anyhow!("unexpected rule in pratt parser")),
-                    })
+                    .map_primary(|primary| self.build_expr_from_pair(primary))
                     .map_infix(|lhs, op, rhs| match op.as_rule() {
                         Rule::add => Ok(Expr::NumOp {
                             lhs: Box::new(lhs?),
@@ -202,9 +203,50 @@ mod tests {
 
             signal x = 10
             signal y = 20 # test comment
-            signal z = 30
+            signal z = 30 / 2
 
             signal a = x*y + z
+        ";
+
+        let p = LangParser::parse(program, "test_program")?;
+        let expected = vec![
+            AstNode::StaticDef("v".to_string(), Expr::Lit("0".to_string())),
+            AstNode::SignalDef("x".to_string(), Expr::Lit("10".to_string())),
+            AstNode::SignalDef("y".to_string(), Expr::Lit("20".to_string())),
+            AstNode::SignalDef(
+                "z".to_string(),
+                Expr::NumOp {
+                    lhs: Box::new(Expr::Lit("30".to_string())),
+                    op: NumOp::Inv,
+                    rhs: Box::new(Expr::Lit("2".to_string())),
+                },
+            ),
+            AstNode::SignalDef(
+                "a".to_string(),
+                Expr::NumOp {
+                    lhs: Box::new(Expr::NumOp {
+                        lhs: Box::new(Expr::Val("x".to_string(), vec![])),
+                        op: NumOp::Mul,
+                        rhs: Box::new(Expr::Val("y".to_string(), vec![])),
+                    }),
+                    rhs: Box::new(Expr::Val("z".to_string(), vec![])),
+                    op: NumOp::Add,
+                },
+            ),
+        ];
+        assert_eq!(expected, p.ast);
+        Ok(())
+    }
+
+    #[test]
+    fn parse_parentheses() -> Result<()> {
+        let program = "static v = 0
+
+            signal x = 10
+            signal y = 20 # test comment
+            signal z = (30)
+
+            signal a = x * (y + ((((z - v)))))
         ";
 
         let p = LangParser::parse(program, "test_program")?;
@@ -216,13 +258,17 @@ mod tests {
             AstNode::SignalDef(
                 "a".to_string(),
                 Expr::NumOp {
-                    lhs: Box::new(Expr::NumOp {
-                        lhs: Box::new(Expr::Val("x".to_string(), vec![])),
-                        op: NumOp::Mul,
-                        rhs: Box::new(Expr::Val("y".to_string(), vec![])),
+                    lhs: Box::new(Expr::Val("x".to_string(), vec![])),
+                    rhs: Box::new(Expr::NumOp {
+                        lhs: Box::new(Expr::Val("y".to_string(), vec![])),
+                        op: NumOp::Add,
+                        rhs: Box::new(Expr::NumOp {
+                            lhs: Box::new(Expr::Val("z".to_string(), vec![])),
+                            op: NumOp::Sub,
+                            rhs: Box::new(Expr::Val("v".to_string(), vec![])),
+                        }),
                     }),
-                    rhs: Box::new(Expr::Val("z".to_string(), vec![])),
-                    op: NumOp::Add,
+                    op: NumOp::Mul,
                 },
             ),
         ];
