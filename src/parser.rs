@@ -86,7 +86,7 @@ impl LangParser {
             match pair.as_rule() {
                 Rule::stmt => {
                     let mut pair = pair.into_inner();
-                    let next = LangParser::next_or_error(&mut pair)?;
+                    let next = Self::next_or_error(&mut pair)?;
                     let ast = self.build_ast_from_pair(next)?;
                     self.ast.push(ast);
                 }
@@ -101,21 +101,15 @@ impl LangParser {
         match pair.as_rule() {
             Rule::static_def => {
                 let mut pair = pair.into_inner();
-                let name = LangParser::next_or_error(&mut pair)?.as_str().to_string();
-                let expr = LangParser::next_or_error(&mut pair)?;
-                Ok(AstNode::StaticDef(
-                    name.as_str().to_string(),
-                    self.build_expr_from_pair(expr)?,
-                ))
+                let name = Self::next_or_error(&mut pair)?.to_string();
+                let expr = Self::next_or_error(&mut pair)?;
+                Ok(AstNode::StaticDef(name, self.build_expr_from_pair(expr)?))
             }
             Rule::signal_def => {
                 let mut pair = pair.into_inner();
-                let name = LangParser::next_or_error(&mut pair)?.as_str().to_string();
-                let expr = LangParser::next_or_error(&mut pair)?;
-                Ok(AstNode::SignalDef(
-                    name.as_str().to_string(),
-                    self.build_expr_from_pair(expr)?,
-                ))
+                let name = Self::next_or_error(&mut pair)?.to_string();
+                let expr = Self::next_or_error(&mut pair)?;
+                Ok(AstNode::SignalDef(name, self.build_expr_from_pair(expr)?))
             }
             _ => unreachable!(),
         }
@@ -123,35 +117,35 @@ impl LangParser {
 
     fn build_expr_from_pair(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<Expr> {
         match pair.as_rule() {
-            Rule::literal_dec => Ok(Expr::Lit(pair.as_str().to_string())),
+            Rule::literal_dec => Ok(Expr::Lit(pair.to_string())),
             Rule::atom => {
                 let mut pair = pair.into_inner();
-                let n = LangParser::next_or_error(&mut pair)?;
+                let n = Self::next_or_error(&mut pair)?;
                 match n.as_rule() {
                     // Rule::function_call => Ok(self.build_expr_from_pair(n)?),
-                    Rule::varname => Ok(Expr::Val(n.as_str().to_string(), vec![])),
+                    Rule::varname => Ok(Expr::Val(n.to_string(), vec![])),
                     // Rule::var_indexed => {
                     //     let mut pair = n.into_inner();
-                    //     let name = LangParser::next_or_error(&mut pair)?.as_str().to_string();
+                    //     let name = Self::next_or_error(&mut pair)?.to_string();
                     //     let mut indices: Vec<Expr> = Vec::new();
                     //     for v in pair {
                     //         indices.push(self.build_expr_from_pair(v)?);
                     //     }
                     //     Ok(Expr::Val(name, indices))
                     // }
-                    Rule::literal_dec => Ok(Expr::Lit(n.as_str().to_string())),
+                    Rule::literal_dec => Ok(Expr::Lit(n.to_string())),
                     _ => anyhow::bail!("invalid atom"),
                 }
             }
             Rule::parenth => {
                 let mut pair = pair.into_inner();
-                let n = LangParser::next_or_error(&mut pair)?;
+                let n = Self::next_or_error(&mut pair)?;
                 self.build_expr_from_pair(n)
             }
             Rule::expr => {
                 let mut pair = pair.into_inner();
                 if pair.len() == 1 {
-                    return self.build_expr_from_pair(LangParser::next_or_error(&mut pair)?);
+                    return self.build_expr_from_pair(Self::next_or_error(&mut pair)?);
                 }
                 let pratt = PrattParser::new()
                     .op(Op::infix(Rule::add, Assoc::Left) | Op::infix(Rule::sub, Assoc::Left))
