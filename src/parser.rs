@@ -12,8 +12,11 @@ use pest_derive::Parser;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AstNode {
-    SignalDef(String, Expr),
-    StaticDef(String, Expr),
+    // type, name, value
+    Def(String, String, Expr),
+    // type, name, dimensions
+    // a vector of length 0 indicates a scalar
+    DefEmpty(String, String, Vec<Expr>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -54,15 +57,10 @@ impl LangParser {
             entry_fn_name: name.to_string(),
         };
 
-        match LangPestParser::parse(Rule::program, &source) {
-            Ok(pairs) => {
-                let ast = out.build_ast_from_lines(pairs);
-                if let Err(e) = ast {
-                    anyhow::bail!("error building program ast: {e}");
-                }
-            }
-            Err(e) => {
-                return Err(anyhow::anyhow!(e));
+        let pairs = LangPestParser::parse(Rule::program, &source)?;
+        for pair in pairs {
+            if let Some(node) = out.build_ast_node_from_pair(pair)? {
+                out.ast.push(node);
             }
         }
         Ok(out)
@@ -81,49 +79,60 @@ impl LangParser {
         }
     }
 
-    fn build_ast_from_lines(&mut self, pairs: Pairs<Rule>) -> Result<()> {
-        for pair in pairs {
-            match pair.as_rule() {
-                Rule::stmt => {
-                    let mut pair = pair.into_inner();
-                    let next = Self::next_or_error(&mut pair)?;
-                    let ast = self.build_ast_from_pair(next)?;
-                    self.ast.push(ast);
-                }
-                Rule::EOI => {}
-                _ => anyhow::bail!("unexpected line pair rule: {:?}", pair.as_rule()),
-            }
+    fn parse_def_type(pair: pest::iterators::Pair<Rule>) -> Result<String> {
+        let def_type = pair.as_str().to_string();
+        if def_type == "signal" || def_type == "static" {
+            Ok(def_type)
+        } else {
+            Err(pest::error::Error::<()>::new_from_span(
+                pest::error::ErrorVariant::CustomError {
+                    message: "expected type static or signal".to_string(),
+                },
+                pair.as_span(),
+            )
+            .into())
         }
-        Ok(())
     }
 
-    fn build_ast_from_pair(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNode> {
+    fn build_ast_node_from_pair(
+        &mut self,
+        pair: pest::iterators::Pair<Rule>,
+    ) -> Result<Option<AstNode>> {
         match pair.as_rule() {
-            Rule::static_def => {
+            Rule::def => {
                 let mut pair = pair.into_inner();
-                let name = Self::next_or_error(&mut pair)?.to_string();
+                let def_type = Self::next_or_error(&mut pair)?;
+                let def_type = Self::parse_def_type(def_type)?;
+                let name = Self::next_or_error(&mut pair)?.as_str().to_string();
                 let expr = Self::next_or_error(&mut pair)?;
-                Ok(AstNode::StaticDef(name, self.build_expr_from_pair(expr)?))
+                let expr = self.build_expr_from_pair(expr)?;
+                Ok(Some(AstNode::Def(def_type, name, expr)))
             }
-            Rule::signal_def => {
+            Rule::def_empty => {
                 let mut pair = pair.into_inner();
-                let name = Self::next_or_error(&mut pair)?.to_string();
-                let expr = Self::next_or_error(&mut pair)?;
-                Ok(AstNode::SignalDef(name, self.build_expr_from_pair(expr)?))
+                let def_type = Self::next_or_error(&mut pair)?;
+                let def_type = Self::parse_def_type(def_type)?;
+                let name = Self::next_or_error(&mut pair)?.as_str().to_string();
+                let mut dimensions = vec![];
+                while let Some(v) = pair.next() {
+                    dimensions.push(self.build_expr_from_pair(v)?);
+                }
+                Ok(Some(AstNode::DefEmpty(def_type, name, dimensions)))
             }
-            _ => unreachable!(),
+            Rule::EOI => Ok(None),
+            _ => anyhow::bail!("unexpected line pair rule: {:?}", pair.as_rule()),
         }
     }
 
     fn build_expr_from_pair(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<Expr> {
         match pair.as_rule() {
-            Rule::literal_dec => Ok(Expr::Lit(pair.to_string())),
+            Rule::literal_dec => Ok(Expr::Lit(pair.as_str().to_string())),
             Rule::atom => {
                 let mut pair = pair.into_inner();
                 let n = Self::next_or_error(&mut pair)?;
                 match n.as_rule() {
                     // Rule::function_call => Ok(self.build_expr_from_pair(n)?),
-                    Rule::varname => Ok(Expr::Val(n.to_string(), vec![])),
+                    Rule::varname => Ok(Expr::Val(n.as_str().to_string(), vec![])),
                     // Rule::var_indexed => {
                     //     let mut pair = n.into_inner();
                     //     let name = Self::next_or_error(&mut pair)?.to_string();
@@ -133,7 +142,7 @@ impl LangParser {
                     //     }
                     //     Ok(Expr::Val(name, indices))
                     // }
-                    Rule::literal_dec => Ok(Expr::Lit(n.to_string())),
+                    Rule::literal_dec => Ok(Expr::Lit(n.as_str().to_string())),
                     _ => anyhow::bail!("invalid atom"),
                 }
             }
@@ -204,10 +213,23 @@ mod tests {
 
         let p = LangParser::parse(program, "test_program")?;
         let expected = vec![
-            AstNode::StaticDef("v".to_string(), Expr::Lit("0".to_string())),
-            AstNode::SignalDef("x".to_string(), Expr::Lit("10".to_string())),
-            AstNode::SignalDef("y".to_string(), Expr::Lit("20".to_string())),
-            AstNode::SignalDef(
+            AstNode::Def(
+                "static".to_string(),
+                "v".to_string(),
+                Expr::Lit("0".to_string()),
+            ),
+            AstNode::Def(
+                "signal".to_string(),
+                "x".to_string(),
+                Expr::Lit("10".to_string()),
+            ),
+            AstNode::Def(
+                "signal".to_string(),
+                "y".to_string(),
+                Expr::Lit("20".to_string()),
+            ),
+            AstNode::Def(
+                "signal".to_string(),
                 "z".to_string(),
                 Expr::NumOp {
                     lhs: Box::new(Expr::Lit("30".to_string())),
@@ -215,7 +237,8 @@ mod tests {
                     rhs: Box::new(Expr::Lit("2".to_string())),
                 },
             ),
-            AstNode::SignalDef(
+            AstNode::Def(
+                "signal".to_string(),
                 "a".to_string(),
                 Expr::NumOp {
                     lhs: Box::new(Expr::NumOp {
@@ -226,6 +249,52 @@ mod tests {
                     rhs: Box::new(Expr::Val("z".to_string(), vec![])),
                     op: NumOp::Add,
                 },
+            ),
+        ];
+        assert_eq!(expected, p.ast);
+        Ok(())
+    }
+
+    #[test]
+    fn parse_empty_vars() -> Result<()> {
+        let program = "static v
+
+            signal x
+            signal y: [20]
+            signal z: [20][30]
+
+            static l = 100
+
+            # we'll test parentheses here too because why not
+            signal a: [((l + v))]
+        ";
+        let p = LangParser::parse(program, "test_program")?;
+        let expected = vec![
+            AstNode::DefEmpty("static".to_string(), "v".to_string(), vec![]),
+            AstNode::DefEmpty("signal".to_string(), "x".to_string(), vec![]),
+            AstNode::DefEmpty(
+                "signal".to_string(),
+                "y".to_string(),
+                vec![Expr::Lit("20".to_string())],
+            ),
+            AstNode::DefEmpty(
+                "signal".to_string(),
+                "z".to_string(),
+                vec![Expr::Lit("20".to_string()), Expr::Lit("30".to_string())],
+            ),
+            AstNode::Def(
+                "static".to_string(),
+                "l".to_string(),
+                Expr::Lit("100".to_string()),
+            ),
+            AstNode::DefEmpty(
+                "signal".to_string(),
+                "a".to_string(),
+                vec![Expr::NumOp {
+                    lhs: Box::new(Expr::Val("l".to_string(), vec![])),
+                    op: NumOp::Add,
+                    rhs: Box::new(Expr::Val("v".to_string(), vec![])),
+                }],
             ),
         ];
         assert_eq!(expected, p.ast);
@@ -245,11 +314,28 @@ mod tests {
 
         let p = LangParser::parse(program, "test_program")?;
         let expected = vec![
-            AstNode::StaticDef("v".to_string(), Expr::Lit("0".to_string())),
-            AstNode::SignalDef("x".to_string(), Expr::Lit("10".to_string())),
-            AstNode::SignalDef("y".to_string(), Expr::Lit("20".to_string())),
-            AstNode::SignalDef("z".to_string(), Expr::Lit("30".to_string())),
-            AstNode::SignalDef(
+            AstNode::Def(
+                "static".to_string(),
+                "v".to_string(),
+                Expr::Lit("0".to_string()),
+            ),
+            AstNode::Def(
+                "signal".to_string(),
+                "x".to_string(),
+                Expr::Lit("10".to_string()),
+            ),
+            AstNode::Def(
+                "signal".to_string(),
+                "y".to_string(),
+                Expr::Lit("20".to_string()),
+            ),
+            AstNode::Def(
+                "signal".to_string(),
+                "z".to_string(),
+                Expr::Lit("30".to_string()),
+            ),
+            AstNode::Def(
+                "signal".to_string(),
                 "a".to_string(),
                 Expr::NumOp {
                     lhs: Box::new(Expr::Val("x".to_string(), vec![])),

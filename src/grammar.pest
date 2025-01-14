@@ -1,6 +1,6 @@
 program = _{ SOI ~ (stmt? ~ "\n")* ~ EOI }
 
-stmt = { static_def | signal_def }
+stmt = _{ def | def_empty }
 
 expr    = { primary ~ (op ~ primary)* }
 primary = _{ parenth | atom }
@@ -12,8 +12,16 @@ sub =  { "-" }
 mul =  { "*" }
 inv =  { "/" }
 
-static_def = { "static" ~ varname ~ "=" ~ expr }
-signal_def = { "signal" ~ varname ~ "=" ~ expr }
+// we'll handle keyword checking in rust
+// so we can output a more clean error
+raw_type = @{ char+ }
+def = { raw_type ~ varname ~ "=" ~ expr }
+
+// if a colon is specified a shape must follow
+def_empty = { raw_type ~ varname ~ (":" ~ type_shape+)? }
+// compile time assertion: expr must consist of only statics
+// e.g. shape must be fully resolvable at compile time
+type_shape = _{ "[" ~ expr ~ "]" }
 
 atom = { literal_dec | varname }
 
