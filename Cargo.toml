@@ -1,0 +1,17 @@
+[package]
+name = "mathlang"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = ["serde"]
+serde = ["dep:serde"]
+
+[dependencies]
+anyhow = "1.0.95"
+camino = "1.1.9"
+clap = "4.5.26"
+pest = "2.7.15"
+pest_derive = "2.7.15"
+scalarff = "0.8.1"
+serde = { version = "1.0.217", features = ["derive"], optional = true }

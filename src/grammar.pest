@@ -1,0 +1,25 @@
+program = _{ SOI ~ (stmt? ~ "\n")* ~ EOI }
+
+stmt = { static_def | signal_def }
+
+expr = { atom ~ (op ~ atom)* }
+
+op  = _{ add | sub | mul | inv }
+add =  { "+" }
+sub =  { "-" }
+mul =  { "*" }
+inv =  { "/" }
+
+static_def = { "static" ~ varname ~ "=" ~ expr }
+signal_def = { "signal" ~ varname ~ "=" ~ expr }
+
+atom = { literal_dec | varname }
+
+literal_dec = @{ ASCII_DIGIT+ }
+
+varname = @{ char+ }
+
+char = _{ ASCII_ALPHANUMERIC | "_" }
+
+WHITESPACE = _{ " " }
+COMMENT    = _{ "#" ~ (!"\n" ~ ANY)* }
