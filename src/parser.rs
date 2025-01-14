@@ -119,6 +119,17 @@ impl LangParser {
                 let name = Self::next_or_error(&mut pair)?.as_str().to_string();
                 let mut dimensions = vec![];
                 while let Some(v) = pair.next() {
+                    let expr = self.build_expr_from_pair(v.clone())?;
+                    if matches!(expr, Expr::VecLit(_)) {
+                        return Err(pest::error::Error::<()>::new_from_span(
+                            pest::error::ErrorVariant::CustomError {
+                                message: "cannot specify dimension of variable using a vector literal\n    HINT: a 4x8 matrix is [4][8]"
+                                    .to_string(),
+                            },
+                            v.as_span(),
+                        )
+                        .into());
+                    }
                     dimensions.push(self.build_expr_from_pair(v)?);
                 }
                 Ok(Some(AstNode::DefEmpty(def_type, name, dimensions)))
@@ -145,15 +156,28 @@ impl LangParser {
                 match n.as_rule() {
                     // Rule::function_call => Ok(self.build_expr_from_pair(n)?),
                     Rule::varname => Ok(Expr::Val(n.as_str().to_string(), vec![])),
-                    // Rule::var_indexed => {
-                    //     let mut pair = n.into_inner();
-                    //     let name = Self::next_or_error(&mut pair)?.to_string();
-                    //     let mut indices: Vec<Expr> = Vec::new();
-                    //     for v in pair {
-                    //         indices.push(self.build_expr_from_pair(v)?);
-                    //     }
-                    //     Ok(Expr::Val(name, indices))
-                    // }
+                    Rule::var => {
+                        let mut pair = n.into_inner();
+                        let name = Self::next_or_error(&mut pair)?.as_str().to_string();
+                        let mut indices: Vec<Expr> = Vec::new();
+                        while let Some(v) = pair.next() {
+                            let expr = self.build_expr_from_pair(v.clone())?;
+                            // disallow vector literals in variable indices
+                            if matches!(expr, Expr::VecLit(_)) {
+                                return Err(pest::error::Error::<()>::new_from_span(
+                                    pest::error::ErrorVariant::CustomError {
+                                        message:
+                                            "cannot access index of variable using a vector literal"
+                                                .to_string(),
+                                    },
+                                    v.as_span(),
+                                )
+                                .into());
+                            }
+                            indices.push(expr);
+                        }
+                        Ok(Expr::Val(name, indices))
+                    }
                     Rule::literal_dec => Ok(Expr::Lit(n.as_str().to_string())),
                     _ => anyhow::bail!("invalid atom"),
                 }
@@ -314,6 +338,78 @@ mod tests {
             ]),
         )];
         assert_eq!(expected, p.ast);
+        Ok(())
+    }
+
+    #[test]
+    fn parse_indexed_var() -> Result<()> {
+        let program = "
+            signal y: [20][10][3]
+
+            signal z = y[0][1][2]
+        ";
+        let p = LangParser::parse(program, "test_program")?;
+        let expected = vec![
+            AstNode::DefEmpty(
+                "signal".to_string(),
+                "y".to_string(),
+                vec![
+                    Expr::Lit("20".to_string()),
+                    Expr::Lit("10".to_string()),
+                    Expr::Lit("3".to_string()),
+                ],
+            ),
+            AstNode::Def(
+                "signal".to_string(),
+                "z".to_string(),
+                Expr::Val(
+                    "y".to_string(),
+                    vec![
+                        Expr::Lit("0".to_string()),
+                        Expr::Lit("1".to_string()),
+                        Expr::Lit("2".to_string()),
+                    ],
+                ),
+            ),
+        ];
+        assert_eq!(expected, p.ast);
+        Ok(())
+    }
+
+    #[test]
+    fn parse_indexed_var_error() -> Result<()> {
+        let program = "
+            signal y: [20][10][3]
+
+            # it should be illegal to access an index
+            # using a vector literal even though the
+            # grammar technically allows it
+            signal z = y[[0, 1, 2]]
+        ";
+        let r = LangParser::parse(program, "test_program");
+        if let Err(v) = r {
+            println!("{}", v);
+        } else {
+            let r = r.unwrap();
+            println!("{:?}", r.ast);
+            panic!("expected error accessing index using vector literal");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn parse_empty_var_error_vec_literal() -> Result<()> {
+        let program = "
+            signal y: [[20, 30]]
+        ";
+        let r = LangParser::parse(program, "test_program");
+        if let Err(v) = r {
+            println!("{}", v);
+        } else {
+            let r = r.unwrap();
+            println!("{:?}", r.ast);
+            panic!("expected error instantiating empty variable using vector literal as dimension");
+        }
         Ok(())
     }
 
