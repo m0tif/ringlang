@@ -2,7 +2,8 @@ program = _{ SOI ~ (stmt? ~ "\n")* ~ EOI }
 
 stmt = { static_def | signal_def }
 
-expr = { atom ~ (op ~ atom)* }
+expr    = { atom ~ (op ~ atom)* }
+// parenth = { "(" ~ expr ~ ")" }
 
 op  = _{ add | sub | mul | inv }
 add =  { "+" }

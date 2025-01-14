@@ -10,13 +10,13 @@ use pest::Parser;
 use pest::RuleType;
 use pest_derive::Parser;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum AstNode {
     SignalDef(String, Expr),
     StaticDef(String, Expr),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Lit(String),
     Val(String, Vec<Expr>),
@@ -27,7 +27,7 @@ pub enum Expr {
     },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum NumOp {
     Add,
     Sub,
@@ -187,5 +187,46 @@ impl LangParser {
                 unknown_expr
             ),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use anyhow::Result;
+
+    use super::*;
+
+    #[test]
+    fn parse_simple_program() -> Result<()> {
+        let program = "static v = 0
+
+            signal x = 10
+            signal y = 20 # test comment
+            signal z = 30
+
+            signal a = x*y + z
+        ";
+
+        let p = LangParser::parse(program, "test_program")?;
+        let expected = vec![
+            AstNode::StaticDef("v".to_string(), Expr::Lit("0".to_string())),
+            AstNode::SignalDef("x".to_string(), Expr::Lit("10".to_string())),
+            AstNode::SignalDef("y".to_string(), Expr::Lit("20".to_string())),
+            AstNode::SignalDef("z".to_string(), Expr::Lit("30".to_string())),
+            AstNode::SignalDef(
+                "a".to_string(),
+                Expr::NumOp {
+                    lhs: Box::new(Expr::NumOp {
+                        lhs: Box::new(Expr::Val("x".to_string(), vec![])),
+                        op: NumOp::Mul,
+                        rhs: Box::new(Expr::Val("y".to_string(), vec![])),
+                    }),
+                    rhs: Box::new(Expr::Val("z".to_string(), vec![])),
+                    op: NumOp::Add,
+                },
+            ),
+        ];
+        assert_eq!(expected, p.ast);
+        Ok(())
     }
 }
