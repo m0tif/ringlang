@@ -362,7 +362,15 @@ mod tests {
 
     #[test]
     fn parse_vec_literal() -> Result<()> {
-        let program = "static v = [0, 1, 2, 3, 4]";
+        let program = "
+            static v = [
+                0,
+                1,
+                2,
+                3,
+                4
+            ]
+            ";
         let p = LangParser::parse(program, "test_program")?;
         let expected = vec![AstNode::Def(
             "static".to_string(),

@@ -1,4 +1,4 @@
-program = _{ SOI ~ (stmt? ~ "\n")* ~ EOI }
+program = _{ SOI ~ stmt* ~ EOI }
 
 stmt = _{ def | def_empty | assign }
 
@@ -45,5 +45,5 @@ varname = @{ char+ }
 
 char = _{ ASCII_ALPHANUMERIC | "_" }
 
-WHITESPACE = _{ " " }
+WHITESPACE = _{ " " | "\n" }
 COMMENT    = _{ "#" ~ (!"\n" ~ ANY)* }
