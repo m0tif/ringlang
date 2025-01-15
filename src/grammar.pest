@@ -1,6 +1,6 @@
 program = _{ SOI ~ stmt* ~ EOI }
 
-stmt = _{ def | def_empty | assign }
+stmt = _{ for_loop | def | def_empty | assign }
 
 expr    = { primary ~ (op ~ primary)* }
 // there are two cases where we don't want
@@ -14,6 +14,11 @@ parenth = { "(" ~ expr ~ ")" }
 // vector literal may contain nested vectors
 // to form a matrix or hypercube
 vector_lit = { "[" ~ (expr ~ ",")* ~ expr ~ "]" }
+
+range_delim = { "..=" | ".." }
+range = { expr ~ range_delim ~ expr }
+for_loop = { "for" ~ varname ~ "in" ~ range ~ block }
+block = _{ "{" ~ stmt* ~ "}" }
 
 op  = _{ add | sub | mul | inv }
 add =  { "+" }

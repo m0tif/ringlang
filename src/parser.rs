@@ -19,6 +19,9 @@ pub enum AstNode {
     DefEmpty(String, String, Vec<Expr>),
     // assignee = value
     Assign(Expr, Expr),
+    Range(Expr, bool, Expr),
+    // iterator variable name, range, block
+    ForLoop(String, Box<AstNode>, Vec<AstNode>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -141,6 +144,30 @@ impl LangParser {
                 let assignee = self.build_expr_from_pair(Self::next_or_error(&mut pair)?)?;
                 let val = self.build_expr_from_pair(Self::next_or_error(&mut pair)?)?;
                 Ok(Some(AstNode::Assign(assignee, val)))
+            }
+            Rule::range => {
+                let mut pair = pair.into_inner();
+                // TODO: disallow vector literals here
+                let start = self.build_expr_from_pair(Self::next_or_error(&mut pair)?)?;
+                let range_delim = Self::next_or_error(&mut pair)?.as_str().to_string();
+                let end = self.build_expr_from_pair(Self::next_or_error(&mut pair)?)?;
+                Ok(Some(AstNode::Range(start, range_delim == "..=", end)))
+            }
+            Rule::for_loop => {
+                let mut pair = pair.into_inner();
+                let iterator_varname = Self::next_or_error(&mut pair)?.as_str().to_string();
+                let range = self
+                    .build_ast_node_from_pair(Self::next_or_error(&mut pair)?)?
+                    .unwrap();
+                let mut stmts = vec![];
+                while let Some(n) = pair.next() {
+                    stmts.push(self.build_ast_node_from_pair(n)?.unwrap());
+                }
+                Ok(Some(AstNode::ForLoop(
+                    iterator_varname,
+                    Box::new(range),
+                    stmts,
+                )))
             }
             Rule::EOI => Ok(None),
             _ => anyhow::bail!("unexpected line pair rule: {:?}", pair.as_rule()),
@@ -295,6 +322,57 @@ mod tests {
                 },
             ),
         ];
+        assert_eq!(expected, p.ast);
+        Ok(())
+    }
+
+    #[test]
+    fn parse_for_loop() -> Result<()> {
+        let program = "
+            for aaa in 0..10 {
+                comp a = 0
+                signal v = aaa
+                for bbb in 10+5..=(20*2) {}
+            }
+        ";
+        let p = LangParser::parse(program, "test_program")?;
+        let expected = vec![AstNode::ForLoop(
+            "aaa".to_string(),
+            Box::new(AstNode::Range(
+                Expr::Lit("0".to_string()),
+                false,
+                Expr::Lit("10".to_string()),
+            )),
+            vec![
+                AstNode::Def(
+                    "comp".to_string(),
+                    "a".to_string(),
+                    Expr::Lit("0".to_string()),
+                ),
+                AstNode::Def(
+                    "signal".to_string(),
+                    "v".to_string(),
+                    Expr::Val("aaa".to_string(), vec![]),
+                ),
+                AstNode::ForLoop(
+                    "bbb".to_string(),
+                    Box::new(AstNode::Range(
+                        Expr::NumOp {
+                            lhs: Box::new(Expr::Lit("10".to_string())),
+                            op: NumOp::Add,
+                            rhs: Box::new(Expr::Lit("5".to_string())),
+                        },
+                        true,
+                        Expr::NumOp {
+                            lhs: Box::new(Expr::Lit("20".to_string())),
+                            op: NumOp::Mul,
+                            rhs: Box::new(Expr::Lit("2".to_string())),
+                        },
+                    )),
+                    vec![],
+                ),
+            ],
+        )];
         assert_eq!(expected, p.ast);
         Ok(())
     }
