@@ -8,7 +8,7 @@ A runtime agnostic language for expressing cryptographic programs.
 - [x] `static` scalars, vectors, and matrices
 - [x] `signal` variables
 - [x] basic math operations
-- [ ] indexed read/write for variables
+- [x] indexed read/write for variables
 - [x] vector/matrix/hypercube literals
 - [ ] `loop` and `if` flow control using `static` variables
 - [ ] function calls

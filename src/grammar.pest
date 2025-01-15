@@ -1,6 +1,6 @@
 program = _{ SOI ~ (stmt? ~ "\n")* ~ EOI }
 
-stmt = _{ def | def_empty }
+stmt = _{ def | def_empty | assign }
 
 expr    = { primary ~ (op ~ primary)* }
 // there are two cases where we don't want
@@ -24,7 +24,9 @@ inv =  { "/" }
 // we'll handle keyword checking in rust
 // so we can output a more clean error
 raw_type = @{ char+ }
-def = { raw_type ~ varname ~ "=" ~ (expr) }
+def = { raw_type ~ varname ~ "=" ~ expr }
+
+assign = { var ~ "=" ~ expr }
 
 // if a colon is specified a shape must follow
 def_empty = { raw_type ~ varname ~ (":" ~ type_shape+)? }

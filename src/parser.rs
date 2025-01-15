@@ -17,6 +17,8 @@ pub enum AstNode {
     // type, name, dimensions
     // a vector of length 0 indicates a scalar
     DefEmpty(String, String, Vec<Expr>),
+    // assignee = value
+    Assign(Expr, Expr),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -134,6 +136,12 @@ impl LangParser {
                 }
                 Ok(Some(AstNode::DefEmpty(def_type, name, dimensions)))
             }
+            Rule::assign => {
+                let mut pair = pair.into_inner();
+                let assignee = self.build_expr_from_pair(Self::next_or_error(&mut pair)?)?;
+                let val = self.build_expr_from_pair(Self::next_or_error(&mut pair)?)?;
+                Ok(Some(AstNode::Assign(assignee, val)))
+            }
             Rule::EOI => Ok(None),
             _ => anyhow::bail!("unexpected line pair rule: {:?}", pair.as_rule()),
         }
@@ -150,34 +158,34 @@ impl LangParser {
                 }
                 Ok(Expr::VecLit(vars))
             }
+            Rule::var => {
+                let mut pair = pair.into_inner();
+                let name = Self::next_or_error(&mut pair)?.as_str().to_string();
+                let mut indices: Vec<Expr> = Vec::new();
+                while let Some(v) = pair.next() {
+                    let expr = self.build_expr_from_pair(v.clone())?;
+                    // disallow vector literals in variable indices
+                    if matches!(expr, Expr::VecLit(_)) {
+                        return Err(pest::error::Error::<()>::new_from_span(
+                            pest::error::ErrorVariant::CustomError {
+                                message: "cannot access index of variable using a vector literal\n    HINT: remove any extra brackets"
+                                    .to_string(),
+                            },
+                            v.as_span(),
+                        )
+                        .into());
+                    }
+                    indices.push(expr);
+                }
+                Ok(Expr::Val(name, indices))
+            }
             Rule::atom => {
                 let mut pair = pair.into_inner();
                 let n = Self::next_or_error(&mut pair)?;
                 match n.as_rule() {
                     // Rule::function_call => Ok(self.build_expr_from_pair(n)?),
                     Rule::varname => Ok(Expr::Val(n.as_str().to_string(), vec![])),
-                    Rule::var => {
-                        let mut pair = n.into_inner();
-                        let name = Self::next_or_error(&mut pair)?.as_str().to_string();
-                        let mut indices: Vec<Expr> = Vec::new();
-                        while let Some(v) = pair.next() {
-                            let expr = self.build_expr_from_pair(v.clone())?;
-                            // disallow vector literals in variable indices
-                            if matches!(expr, Expr::VecLit(_)) {
-                                return Err(pest::error::Error::<()>::new_from_span(
-                                    pest::error::ErrorVariant::CustomError {
-                                        message:
-                                            "cannot access index of variable using a vector literal"
-                                                .to_string(),
-                                    },
-                                    v.as_span(),
-                                )
-                                .into());
-                            }
-                            indices.push(expr);
-                        }
-                        Ok(Expr::Val(name, indices))
-                    }
+                    Rule::var => self.build_expr_from_pair(n),
                     Rule::literal_dec => Ok(Expr::Lit(n.as_str().to_string())),
                     _ => anyhow::bail!("invalid atom"),
                 }
@@ -292,6 +300,67 @@ mod tests {
     }
 
     #[test]
+    fn parse_val_assignment() -> Result<()> {
+        let program = "
+            static v: [10][20]
+            v[0][0] = 99
+            v[1][2] = 999
+
+            static x = 10
+            x = 88
+        ";
+        let p = LangParser::parse(program, "test_program")?;
+        let expected = vec![
+            AstNode::DefEmpty(
+                "static".to_string(),
+                "v".to_string(),
+                vec![Expr::Lit("10".to_string()), Expr::Lit("20".to_string())],
+            ),
+            AstNode::Assign(
+                Expr::Val(
+                    "v".to_string(),
+                    vec![Expr::Lit("0".to_string()), Expr::Lit("0".to_string())],
+                ),
+                Expr::Lit("99".to_string()),
+            ),
+            AstNode::Assign(
+                Expr::Val(
+                    "v".to_string(),
+                    vec![Expr::Lit("1".to_string()), Expr::Lit("2".to_string())],
+                ),
+                Expr::Lit("999".to_string()),
+            ),
+            AstNode::Def(
+                "static".to_string(),
+                "x".to_string(),
+                Expr::Lit("10".to_string()),
+            ),
+            AstNode::Assign(
+                Expr::Val("x".to_string(), vec![]),
+                Expr::Lit("88".to_string()),
+            ),
+        ];
+        assert_eq!(expected, p.ast);
+        Ok(())
+    }
+
+    #[test]
+    fn parse_var_index_assign_error() -> Result<()> {
+        let program = "
+            y[[2]] = 4
+        ";
+        let r = LangParser::parse(program, "test_program");
+        if let Err(v) = r {
+            println!("{}", v);
+        } else {
+            let r = r.unwrap();
+            println!("{:?}", r.ast);
+            panic!("expected error assigning index of variable using vector literal");
+        }
+        Ok(())
+    }
+
+    #[test]
     fn parse_vec_literal() -> Result<()> {
         let program = "static v = [0, 1, 2, 3, 4]";
         let p = LangParser::parse(program, "test_program")?;
@@ -398,7 +467,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_empty_var_error_vec_literal() -> Result<()> {
+    fn parse_empty_var_vec_literal_error() -> Result<()> {
         let program = "
             signal y: [[20, 30]]
         ";
