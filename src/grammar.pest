@@ -1,23 +1,27 @@
-program = _{ SOI ~ stmt* ~ EOI }
+program = _{ SOI ~ (macro_def | stmt)* ~ EOI }
 
-stmt = _{ for_loop | def | def_empty | assign }
+stmt = _{ for_loop | def | def_empty | assign | macro_call }
 
-expr    = { primary ~ (op ~ primary)* }
+expr = { primary ~ (op ~ primary)* }
 // there are two cases where we don't want
 // to allow vector literals.
 // 1. accessing a variable by index
 // 2. specify the dimension of a variable
 // both cases throw custom errors in parser.rs
 primary = _{ parenth | atom | vector_lit }
-parenth = { "(" ~ expr ~ ")" }
+parenth =  { "(" ~ expr ~ ")" }
 
 // vector literal may contain nested vectors
 // to form a matrix or hypercube
 vector_lit = { "[" ~ (expr ~ ",")* ~ expr ~ "]" }
 
+macro_def  = { "macro" ~ varname ~ block }
+macro_call = { varname ~ "!" }
+
 range_delim = { "..=" | ".." }
-range = { expr ~ range_delim ~ expr }
-for_loop = { "for" ~ varname ~ "in" ~ range ~ block }
+range       = { expr ~ range_delim ~ expr }
+for_loop    = { "for" ~ varname ~ "in" ~ range ~ block }
+
 block = _{ "{" ~ stmt* ~ "}" }
 
 op  = _{ add | sub | mul | inv }
@@ -29,7 +33,7 @@ inv =  { "/" }
 // we'll handle keyword checking in rust
 // so we can output a more clean error
 raw_type = @{ char+ }
-def = { raw_type ~ varname ~ "=" ~ expr }
+def      =  { raw_type ~ varname ~ "=" ~ expr }
 
 assign = { var ~ "=" ~ expr }
 
@@ -40,7 +44,7 @@ def_empty = { raw_type ~ varname ~ (":" ~ type_shape+)? }
 type_shape = _{ "[" ~ expr ~ "]" }
 
 varname_index = _{ "[" ~ expr ~ "]" }
-var = { varname ~ varname_index* }
+var           =  { varname ~ varname_index* }
 
 atom = { literal_dec | var }
 

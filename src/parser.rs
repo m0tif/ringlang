@@ -22,6 +22,8 @@ pub enum AstNode {
     Range(Expr, bool, Expr),
     // iterator variable name, range, block
     ForLoop(String, Box<AstNode>, Vec<AstNode>),
+    MacroDef(String, Vec<AstNode>),
+    MacroCall(String),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -169,6 +171,20 @@ impl LangParser {
                     stmts,
                 )))
             }
+            Rule::macro_def => {
+                let mut pair = pair.into_inner();
+                let name = Self::next_or_error(&mut pair)?.as_str().to_string();
+                let mut stmts = vec![];
+                while let Some(n) = pair.next() {
+                    stmts.push(self.build_ast_node_from_pair(n)?.unwrap());
+                }
+                Ok(Some(AstNode::MacroDef(name, stmts)))
+            }
+            Rule::macro_call => {
+                let mut pair = pair.into_inner();
+                let name = Self::next_or_error(&mut pair)?.as_str().to_string();
+                Ok(Some(AstNode::MacroCall(name)))
+            }
             Rule::EOI => Ok(None),
             _ => anyhow::bail!("unexpected line pair rule: {:?}", pair.as_rule()),
         }
@@ -280,6 +296,8 @@ mod tests {
             signal z = 30 / 2
 
             signal a = x*y + z
+
+            call_my_macro!
         ";
 
         let p = LangParser::parse(program, "test_program")?;
@@ -321,6 +339,91 @@ mod tests {
                     op: NumOp::Add,
                 },
             ),
+            AstNode::MacroCall("call_my_macro".to_string()),
+        ];
+        assert_eq!(expected, p.ast);
+        Ok(())
+    }
+
+    #[test]
+    fn parse_macro_in_macro_error() -> Result<()> {
+        let program = "
+            macro hello {
+                macro ohno {
+                    signal n = 0
+                }
+            }
+        ";
+        let r = LangParser::parse(program, "test_program");
+        if let Err(v) = r {
+            println!("{}", v);
+        } else {
+            let r = r.unwrap();
+            println!("{:?}", r.ast);
+            panic!("expected error nesting macros");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn parse_macro_in_loop_error() -> Result<()> {
+        let program = "
+            for _ in 0..10 {
+                macro ohno {
+                    signal n = 0
+                }
+            }
+        ";
+        let r = LangParser::parse(program, "test_program");
+        if let Err(v) = r {
+            println!("{}", v);
+        } else {
+            let r = r.unwrap();
+            println!("{:?}", r.ast);
+            panic!("expected error putting macro in for loop");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn parse_macro_def() -> Result<()> {
+        let program = "
+            macro hello {
+                signal n = 0
+                comp a = 9
+            }
+
+            signal v = 99
+            v = 10
+            hello!
+        ";
+        let p = LangParser::parse(program, "test_program")?;
+        let expected = vec![
+            AstNode::MacroDef(
+                "hello".to_string(),
+                vec![
+                    AstNode::Def(
+                        "signal".to_string(),
+                        "n".to_string(),
+                        Expr::Lit("0".to_string()),
+                    ),
+                    AstNode::Def(
+                        "comp".to_string(),
+                        "a".to_string(),
+                        Expr::Lit("9".to_string()),
+                    ),
+                ],
+            ),
+            AstNode::Def(
+                "signal".to_string(),
+                "v".to_string(),
+                Expr::Lit("99".to_string()),
+            ),
+            AstNode::Assign(
+                Expr::Val("v".to_string(), vec![]),
+                Expr::Lit("10".to_string()),
+            ),
+            AstNode::MacroCall("hello".to_string()),
         ];
         assert_eq!(expected, p.ast);
         Ok(())
