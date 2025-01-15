@@ -87,12 +87,12 @@ impl LangParser {
 
     fn parse_def_type(pair: pest::iterators::Pair<Rule>) -> Result<String> {
         let def_type = pair.as_str().to_string();
-        if def_type == "signal" || def_type == "static" {
+        if def_type == "signal" || def_type == "comp" {
             Ok(def_type)
         } else {
             Err(pest::error::Error::<()>::new_from_span(
                 pest::error::ErrorVariant::CustomError {
-                    message: "expected type static or signal".to_string(),
+                    message: "expected type comp or signal".to_string(),
                 },
                 pair.as_span(),
             )
@@ -246,7 +246,7 @@ mod tests {
 
     #[test]
     fn parse_simple_program() -> Result<()> {
-        let program = "static v = 0
+        let program = "comp v = 0
 
             signal x = 10
             signal y = 20 # test comment
@@ -258,7 +258,7 @@ mod tests {
         let p = LangParser::parse(program, "test_program")?;
         let expected = vec![
             AstNode::Def(
-                "static".to_string(),
+                "comp".to_string(),
                 "v".to_string(),
                 Expr::Lit("0".to_string()),
             ),
@@ -302,17 +302,17 @@ mod tests {
     #[test]
     fn parse_val_assignment() -> Result<()> {
         let program = "
-            static v: [10][20]
+            comp v: [10][20]
             v[0][0] = 99
             v[1][2] = 999
 
-            static x = 10
+            comp x = 10
             x = 88
         ";
         let p = LangParser::parse(program, "test_program")?;
         let expected = vec![
             AstNode::DefEmpty(
-                "static".to_string(),
+                "comp".to_string(),
                 "v".to_string(),
                 vec![Expr::Lit("10".to_string()), Expr::Lit("20".to_string())],
             ),
@@ -331,7 +331,7 @@ mod tests {
                 Expr::Lit("999".to_string()),
             ),
             AstNode::Def(
-                "static".to_string(),
+                "comp".to_string(),
                 "x".to_string(),
                 Expr::Lit("10".to_string()),
             ),
@@ -363,7 +363,7 @@ mod tests {
     #[test]
     fn parse_vec_literal() -> Result<()> {
         let program = "
-            static v = [
+            comp v = [
                 0,
                 1,
                 2,
@@ -373,7 +373,7 @@ mod tests {
             ";
         let p = LangParser::parse(program, "test_program")?;
         let expected = vec![AstNode::Def(
-            "static".to_string(),
+            "comp".to_string(),
             "v".to_string(),
             Expr::VecLit(vec![
                 Expr::Lit("0".to_string()),
@@ -389,10 +389,10 @@ mod tests {
 
     #[test]
     fn parse_mat_literal() -> Result<()> {
-        let program = "static v = [[0, 9], [1, 10], [2, 11], [3, 12], [4, 13]]";
+        let program = "comp v = [[0, 9], [1, 10], [2, 11], [3, 12], [4, 13]]";
         let p = LangParser::parse(program, "test_program")?;
         let expected = vec![AstNode::Def(
-            "static".to_string(),
+            "comp".to_string(),
             "v".to_string(),
             Expr::VecLit(vec![
                 Expr::VecLit(vec![Expr::Lit("0".to_string()), Expr::Lit("9".to_string())]),
@@ -492,20 +492,20 @@ mod tests {
 
     #[test]
     fn parse_empty_vars() -> Result<()> {
-        let program = "static v
+        let program = "comp v
 
             signal x
             signal y: [20]
             signal z: [20][30]
 
-            static l = 100
+            comp l = 100
 
             # we'll test parentheses here too because why not
             signal a: [((l + v))]
         ";
         let p = LangParser::parse(program, "test_program")?;
         let expected = vec![
-            AstNode::DefEmpty("static".to_string(), "v".to_string(), vec![]),
+            AstNode::DefEmpty("comp".to_string(), "v".to_string(), vec![]),
             AstNode::DefEmpty("signal".to_string(), "x".to_string(), vec![]),
             AstNode::DefEmpty(
                 "signal".to_string(),
@@ -518,7 +518,7 @@ mod tests {
                 vec![Expr::Lit("20".to_string()), Expr::Lit("30".to_string())],
             ),
             AstNode::Def(
-                "static".to_string(),
+                "comp".to_string(),
                 "l".to_string(),
                 Expr::Lit("100".to_string()),
             ),
@@ -538,7 +538,7 @@ mod tests {
 
     #[test]
     fn parse_parentheses() -> Result<()> {
-        let program = "static v = 0
+        let program = "comp v = 0
 
             signal x = 10
             signal y = 20 # test comment
@@ -550,7 +550,7 @@ mod tests {
         let p = LangParser::parse(program, "test_program")?;
         let expected = vec![
             AstNode::Def(
-                "static".to_string(),
+                "comp".to_string(),
                 "v".to_string(),
                 Expr::Lit("0".to_string()),
             ),
