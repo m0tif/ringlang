@@ -1,15 +1,15 @@
-# all arguments to entrypoint are comp
+# all arguments to entrypoint are compil
 (T)
 
-comp ROUNDS_F = 10 # POSEIDON_F(T)
-comp ROUNDS_P = 20 # POSEIDON_P(T)
-comp C: [T] # POSEIDON constants
-comp M: [T][T] # POSEIDON matrices
+compil ROUNDS_F = 10 # POSEIDON_F(T)
+compil ROUNDS_P = 20 # POSEIDON_P(T)
+compil C: [T] # POSEIDON constants
+compil M: [T][T] # POSEIDON matrices
 
 signal state: [T]
 
 # current round index
-comp r = 0
+compil r = 0
 
 # first set of full rounds
 for _ in 0..ROUNDS_F \ 2 {
@@ -38,7 +38,7 @@ for _ in 0..ROUNDS_F \ 2 {
 return state
 
 macro linear_layer {
-    # assert_comp_scalar!(T)
+    # assert_compil_scalar!(T)
     for x in 0..T {
         state[x] = state[x] + C[r * T + x]
     }

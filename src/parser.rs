@@ -92,12 +92,12 @@ impl LangParser {
 
     fn parse_def_type(pair: pest::iterators::Pair<Rule>) -> Result<String> {
         let def_type = pair.as_str().to_string();
-        if def_type == "signal" || def_type == "comp" {
+        if def_type == "signal" || def_type == "compil" {
             Ok(def_type)
         } else {
             Err(pest::error::Error::<()>::new_from_span(
                 pest::error::ErrorVariant::CustomError {
-                    message: "expected type comp or signal".to_string(),
+                    message: "expected type compil or signal".to_string(),
                 },
                 pair.as_span(),
             )
@@ -289,7 +289,7 @@ mod tests {
 
     #[test]
     fn parse_simple_program() -> Result<()> {
-        let program = "comp v = 0
+        let program = "compil v = 0
 
             signal x = 10
             signal y = 20 # test comment
@@ -303,7 +303,7 @@ mod tests {
         let p = LangParser::parse(program, "test_program")?;
         let expected = vec![
             AstNode::Def(
-                "comp".to_string(),
+                "compil".to_string(),
                 "v".to_string(),
                 Expr::Lit("0".to_string()),
             ),
@@ -390,7 +390,7 @@ mod tests {
         let program = "
             macro hello {
                 signal n = 0
-                comp a = 9
+                compil a = 9
             }
 
             signal v = 99
@@ -408,7 +408,7 @@ mod tests {
                         Expr::Lit("0".to_string()),
                     ),
                     AstNode::Def(
-                        "comp".to_string(),
+                        "compil".to_string(),
                         "a".to_string(),
                         Expr::Lit("9".to_string()),
                     ),
@@ -433,7 +433,7 @@ mod tests {
     fn parse_for_loop() -> Result<()> {
         let program = "
             for aaa in 0..10 {
-                comp a = 0
+                compil a = 0
                 signal v = aaa
                 for bbb in 10+5..=(20*2) {}
             }
@@ -448,7 +448,7 @@ mod tests {
             )),
             vec![
                 AstNode::Def(
-                    "comp".to_string(),
+                    "compil".to_string(),
                     "a".to_string(),
                     Expr::Lit("0".to_string()),
                 ),
@@ -483,17 +483,17 @@ mod tests {
     #[test]
     fn parse_val_assignment() -> Result<()> {
         let program = "
-            comp v: [10][20]
+            compil v: [10][20]
             v[0][0] = 99
             v[1][2] = 999
 
-            comp x = 10
+            compil x = 10
             x = 88
         ";
         let p = LangParser::parse(program, "test_program")?;
         let expected = vec![
             AstNode::DefEmpty(
-                "comp".to_string(),
+                "compil".to_string(),
                 "v".to_string(),
                 vec![Expr::Lit("10".to_string()), Expr::Lit("20".to_string())],
             ),
@@ -512,7 +512,7 @@ mod tests {
                 Expr::Lit("999".to_string()),
             ),
             AstNode::Def(
-                "comp".to_string(),
+                "compil".to_string(),
                 "x".to_string(),
                 Expr::Lit("10".to_string()),
             ),
@@ -544,7 +544,7 @@ mod tests {
     #[test]
     fn parse_vec_literal() -> Result<()> {
         let program = "
-            comp v = [
+            compil v = [
                 0,
                 1,
                 2,
@@ -554,7 +554,7 @@ mod tests {
             ";
         let p = LangParser::parse(program, "test_program")?;
         let expected = vec![AstNode::Def(
-            "comp".to_string(),
+            "compil".to_string(),
             "v".to_string(),
             Expr::VecLit(vec![
                 Expr::Lit("0".to_string()),
@@ -570,10 +570,10 @@ mod tests {
 
     #[test]
     fn parse_mat_literal() -> Result<()> {
-        let program = "comp v = [[0, 9], [1, 10], [2, 11], [3, 12], [4, 13]]";
+        let program = "compil v = [[0, 9], [1, 10], [2, 11], [3, 12], [4, 13]]";
         let p = LangParser::parse(program, "test_program")?;
         let expected = vec![AstNode::Def(
-            "comp".to_string(),
+            "compil".to_string(),
             "v".to_string(),
             Expr::VecLit(vec![
                 Expr::VecLit(vec![Expr::Lit("0".to_string()), Expr::Lit("9".to_string())]),
@@ -673,20 +673,20 @@ mod tests {
 
     #[test]
     fn parse_empty_vars() -> Result<()> {
-        let program = "comp v
+        let program = "compil v
 
             signal x
             signal y: [20]
             signal z: [20][30]
 
-            comp l = 100
+            compil l = 100
 
             # we'll test parentheses here too because why not
             signal a: [((l + v))]
         ";
         let p = LangParser::parse(program, "test_program")?;
         let expected = vec![
-            AstNode::DefEmpty("comp".to_string(), "v".to_string(), vec![]),
+            AstNode::DefEmpty("compil".to_string(), "v".to_string(), vec![]),
             AstNode::DefEmpty("signal".to_string(), "x".to_string(), vec![]),
             AstNode::DefEmpty(
                 "signal".to_string(),
@@ -699,7 +699,7 @@ mod tests {
                 vec![Expr::Lit("20".to_string()), Expr::Lit("30".to_string())],
             ),
             AstNode::Def(
-                "comp".to_string(),
+                "compil".to_string(),
                 "l".to_string(),
                 Expr::Lit("100".to_string()),
             ),
@@ -719,7 +719,7 @@ mod tests {
 
     #[test]
     fn parse_parentheses() -> Result<()> {
-        let program = "comp v = 0
+        let program = "compil v = 0
 
             signal x = 10
             signal y = 20 # test comment
@@ -731,7 +731,7 @@ mod tests {
         let p = LangParser::parse(program, "test_program")?;
         let expected = vec![
             AstNode::Def(
-                "comp".to_string(),
+                "compil".to_string(),
                 "v".to_string(),
                 Expr::Lit("0".to_string()),
             ),
