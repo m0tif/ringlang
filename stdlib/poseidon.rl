@@ -11,22 +11,6 @@ signal state: [T]
 # current round index
 comp r = 0
 
-macro linear_layer {
-    # assert_comp_scalar!(T)
-    for x in 0..T {
-        state[x] = state[x] + C[r * T + x]
-    }
-}
-
-macro mix_full {
-    signal out: [T]
-    for x in 0..T {
-        # M[x] is a vector of T elements
-        out[x] = sum(M[x] * state)
-    }
-    state = out
-}
-
 # first set of full rounds
 for _ in 0..ROUNDS_F \ 2 {
     linear_layer!
@@ -52,3 +36,19 @@ for _ in 0..ROUNDS_F \ 2 {
 }
 
 return state
+
+macro linear_layer {
+    # assert_comp_scalar!(T)
+    for x in 0..T {
+        state[x] = state[x] + C[r * T + x]
+    }
+}
+
+macro mix_full {
+    signal out: [T]
+    for x in 0..T {
+        # M[x] is a vector of T elements
+        out[x] = sum(M[x] * state)
+    }
+    state = out
+}
