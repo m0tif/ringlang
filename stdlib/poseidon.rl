@@ -14,7 +14,7 @@ compil r = 0
 # first set of full rounds
 for _ in 0..ROUNDS_F \ 2 {
     linear_layer!
-    pow5(state)
+    state = pow5(state)
     mix_full!
     r = r + 1
 }
